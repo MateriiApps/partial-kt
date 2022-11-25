@@ -1,13 +1,17 @@
 package com.github.materiapps.partial
 
-import com.google.devtools.ksp.processing.*
+import com.google.devtools.ksp.processing.Dependencies
+import com.google.devtools.ksp.processing.Resolver
+import com.google.devtools.ksp.processing.SymbolProcessor
+import com.google.devtools.ksp.processing.SymbolProcessorEnvironment
 import com.google.devtools.ksp.symbol.ClassKind
 import com.google.devtools.ksp.symbol.KSAnnotated
 import com.google.devtools.ksp.symbol.KSClassDeclaration
 import com.google.devtools.ksp.symbol.KSVisitorVoid
 import com.google.devtools.ksp.validate
-import com.xinto.ksputil.*
-import java.io.OutputStream
+import com.squareup.kotlinpoet.*
+import com.squareup.kotlinpoet.ParameterizedTypeName.Companion.parameterizedBy
+import com.squareup.kotlinpoet.ksp.*
 
 internal class PartialProcessor(val environment: SymbolProcessorEnvironment) : SymbolProcessor {
     override fun process(resolver: Resolver): List<KSAnnotated> {
@@ -25,183 +29,109 @@ internal class PartialProcessor(val environment: SymbolProcessorEnvironment) : S
 
     inner class PartialVisitor : KSVisitorVoid() {
         override fun visitClassDeclaration(classDeclaration: KSClassDeclaration, data: Unit) {
-            println(data)
             if (classDeclaration.classKind != ClassKind.CLASS)
                 return
 
-            val constructorParams = classDeclaration.primaryConstructor?.parameters
-                ?: return
-
             val packageName = classDeclaration.packageName.asString()
-            val classShortName = classDeclaration.qualifiedName?.getShortName() ?: "<ERROR>"
-            val classQualifiedName = classDeclaration.qualifiedName?.asString() ?: "<ERROR>"
+            val className = classDeclaration.qualifiedName?.getShortName() ?: "<ERROR>"
+            val partialClassName = "${className}Partial"
 
-            val partialClassShortName = classDeclaration.simpleName.asString() + "Partial"
+            val file = FileSpec.builder(packageName, "$className.kt").apply {
+                addBodyComment(
+                    """
+                    Generated partial class for [$className]
+                    DO NOT EDIT MANUALLY
+                    """.trimIndent()
+                )
 
-            val imports = mutableListOf(
-                classQualifiedName,
-                "com.github.materiapps.partial.PartialValue",
-                "com.github.materiapps.partial.getOrElse",
+                val partialClass = makePartialClass(
+                    partialClassName = partialClassName,
+                    classDeclaration = classDeclaration,
+                )
+
+                addType(partialClass)
+                addFunction(
+                    makeMergeFunction(
+                        partialClassName = partialClassName,
+                        classDeclaration = classDeclaration,
+                    )
+                )
+                addFunction(
+                    makeToPartialFunction(
+                        partialClassName = partialClassName,
+                        classDeclaration = classDeclaration,
+                    )
+                )
+            }
+
+            file.build().writeTo(
+                codeGenerator = environment.codeGenerator,
+                dependencies = Dependencies(true, classDeclaration.containingFile!!)
             )
-            val classAnnotations = classDeclaration.annotations
-                .mapNotNull { annotation ->
-                    annotation.sourceAnnotation().let { (type, import) ->
-                        import?.also { imports.add(it) }
-
-                        if (import == PARTIAL_ANNOTATION_IDENTIFIER)
-                            return@let null
-
-                        type
-                    }
-                }.toList()
-
-            val dependencies = Dependencies(true, classDeclaration.containingFile!!)
-
-            val transformedConstructorParams = constructorParams.map { parameter ->
-                val name = parameter.name?.asString() ?: "<ERROR>"
-                val type = parameter.type.sourceType().let { (type, import) ->
-                    imports.addAll(import.filterNotNull())
-                    type
-                }
-
-                val annotations = parameter.annotations
-                    .map { annotation ->
-                        annotation.sourceAnnotation().let { (type, import) ->
-                            import?.also { imports.add(it) }
-                            type
-                        }
-                    }.toList()
-
-                Triple(name, type, annotations)
-            }
-
-            environment.codeGenerator.createNewFile(
-                dependencies = dependencies,
-                packageName = packageName,
-                fileName = partialClassShortName
-            ).use { file ->
-                file.writePackage(packageName)
-
-                file.writeImports(imports)
-
-                file.writeWarning(
-                    thing = "Partial class",
-                    target = classShortName,
-                )
-
-                file.writeDataClass(
-                    partialClassName = partialClassShortName,
-                    classAnnotations = classAnnotations,
-                    constructorParams = transformedConstructorParams
-                )
-
-                file.writeMergeFunction(
-                    classShortName = classShortName,
-                    partialClassShortName = partialClassShortName,
-                    constructorParams = transformedConstructorParams
-                )
-
-                file.writeToPartialFunction(
-                    classShortName = classShortName,
-                    partialClassShortName = partialClassShortName,
-                    constructorParams = transformedConstructorParams,
-                )
-            }
         }
 
-        private fun OutputStream.writeDataClass(
-            partialClassName: String,
-            classAnnotations: List<String>,
-            constructorParams: List<Triple<String, String, List<String>>>
-        ) {
-            classAnnotations.forEach { annotation ->
-                appendTextNewline(annotation)
-            }
+        private fun makePartialClass(partialClassName: String, classDeclaration: KSClassDeclaration): TypeSpec {
+            return TypeSpec.classBuilder(partialClassName).apply {
+                addAnnotations(classDeclaration.annotations
+                    .map { it.toAnnotationSpec() }
+                    .filterNot { it.typeName.equals(PARTIAL_ANNOTATION_IDENTIFIER) }
+                    .toList()
+                )
 
-            appendTextSpaced("data class")
-            appendText(partialClassName)
-            appendTextNewline("(")
-            constructorParams.forEach { (name, type, annotations) ->
-                annotations.forEach { annotation ->
-                    withIndent {
-                        appendTextNewline(annotation)
+                val parameters = classDeclaration.primaryConstructor!!.parameters.map {
+                    ParameterSpec.builder(
+                        it.name!!.asString(),
+                        Partial::class.asClassName().parameterizedBy(it.type.toTypeName()),
+                        it.type.modifiers.mapNotNull { it.toKModifier() }
+                    ).run {
+                        defaultValue("Partial.Missing")
+                        build()
                     }
                 }
-                withIndent {
-                    appendTextSpaced("val")
-                    appendText(name)
-                    appendText(": PartialValue<")
-                    appendText(type)
-                    appendTextNewline("> = PartialValue.Missing,")
-                }
-            }
-            appendTextDoubleNewline(")")
+
+                primaryConstructor(
+                    FunSpec.constructorBuilder()
+                        .addParameters(parameters)
+                        .build()
+                )
+            }.build()
         }
 
-        private fun OutputStream.writeMergeFunction(
-            classShortName: String,
-            partialClassShortName: String,
-            constructorParams: List<Triple<String, String, List<String>>>
-        ) {
-            appendTextSpaced("fun")
-            appendText(classShortName)
-            appendText(".")
-            appendTextSpaced("merge(partial:")
-            appendText(partialClassShortName)
-            appendTextSpaced("):")
-            appendTextSpaced(classShortName)
-            appendTextNewline("{")
-            withIndent {
-                appendTextSpaced("return")
-                appendText(classShortName)
-                appendTextNewline("(")
-                constructorParams.forEach { (name, _, _) ->
-                    withIndent(2) {
-                        appendTextSpaced(name)
-                        appendTextSpaced("=")
-                        appendText("partial.")
-                        appendText(name)
-                        appendTextSpaced(".getOrElse {")
-                        appendTextSpaced(name)
-                        appendText("}")
-                        appendTextNewline(",")
+        private fun makeMergeFunction(partialClassName: String, classDeclaration: KSClassDeclaration): FunSpec {
+            val className = classDeclaration.toClassName()
+            val partialClass = ClassName(classDeclaration.packageName.asString(), partialClassName)
+            val parameters = classDeclaration.primaryConstructor!!.parameters.map { it.name!!.asString() }
+
+            return FunSpec.builder("merge")
+                .receiver(className)
+                .returns(className)
+                .addParameter("partial", partialClass)
+                .beginControlFlow("return %T", className)
+                .apply {
+                    parameters.forEach {
+                        addStatement("$it = partial.getOrElse { $it }")
                     }
                 }
-            }
-            withIndent {
-                appendTextNewline(")")
-            }
-            appendTextDoubleNewline("}")
+                .endControlFlow()
+                .build()
         }
 
-        private fun OutputStream.writeToPartialFunction(
-            classShortName: String,
-            partialClassShortName: String,
-            constructorParams: List<Triple<String, String, List<String>>>,
-        ) {
-            appendTextSpaced("fun")
-            appendText(classShortName)
-            appendTextSpaced(".toPartial():")
-            appendTextSpaced(partialClassShortName)
-            appendTextNewline("{")
-            withIndent {
-                appendTextSpaced("return")
-                appendText(partialClassShortName)
-                appendTextNewline("(")
-                constructorParams.forEach { (name, _, _) ->
-                    withIndent(2) {
-                        appendTextSpaced(name)
-                        appendTextSpaced("=")
-                        appendText("PartialValue.Value(")
-                        appendText(name)
-                        appendTextNewline("),")
+        private fun makeToPartialFunction(partialClassName: String, classDeclaration: KSClassDeclaration): FunSpec {
+            val className = classDeclaration.toClassName()
+            val partialClass = ClassName(classDeclaration.packageName.asString(), partialClassName)
+            val parameters = classDeclaration.primaryConstructor!!.parameters.map { it.name!!.asString() }
+
+            return FunSpec.builder("toPartial")
+                .receiver(classDeclaration.toClassName())
+                .returns(partialClass)
+                .beginControlFlow("return %T", partialClass)
+                .apply {
+                    parameters.forEach {
+                        addStatement("$it = Partial.Value($it)")
                     }
                 }
-            }
-            withIndent {
-                appendTextNewline(")")
-            }
-            appendTextDoubleNewline("}")
+                .endControlFlow()
+                .build()
         }
     }
 
