@@ -1,15 +1,17 @@
+@file:OptIn(ExperimentalSerializationApi::class)
+
 package com.github.materiapps.partial
 
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
 
-@Serializable(PartialValue.Serializer::class)
-public sealed class PartialValue<out T> {
-
-    public class Value<out T>(public val value: T) : PartialValue<T>() {
+@Serializable(Partial.Serializer::class)
+public sealed class Partial<out T> {
+    public class Value<out T>(public val value: T) : Partial<T>() {
         override fun toString(): String = value.toString()
 
         override fun equals(other: Any?): Boolean {
@@ -20,7 +22,7 @@ public sealed class PartialValue<out T> {
         override fun hashCode(): Int = value.hashCode()
     }
 
-    public object Missing : PartialValue<Nothing>() {
+    public object Missing : Partial<Nothing>() {
         override fun toString(): String = "Missing"
 
         override fun equals(other: Any?): Boolean = other is Missing
@@ -30,12 +32,11 @@ public sealed class PartialValue<out T> {
 
     internal class Serializer<T>(
         private val valueSerializer: KSerializer<T>
-    ) : KSerializer<PartialValue<T?>> {
-
+    ) : KSerializer<Partial<T?>> {
         override val descriptor: SerialDescriptor
             get() = valueSerializer.descriptor
 
-        override fun serialize(encoder: Encoder, value: PartialValue<T?>) {
+        override fun serialize(encoder: Encoder, value: Partial<T?>) {
             if (value is Value) {
                 if (value.value != null) {
                     encoder.encodeNotNullMark()
@@ -46,7 +47,7 @@ public sealed class PartialValue<out T> {
             }
         }
 
-        override fun deserialize(decoder: Decoder): PartialValue<T?> {
+        override fun deserialize(decoder: Decoder): Partial<T?> {
             val value = if (!decoder.decodeNotNullMark()) {
                 decoder.decodeNull()
             } else {
@@ -58,18 +59,18 @@ public sealed class PartialValue<out T> {
     }
 }
 
-public inline fun <T> PartialValue<T>.getOrElse(block: () -> T): T {
+public inline fun <T> Partial<T>.getOrElse(block: () -> T): T {
     return when (this) {
-        is PartialValue.Missing -> block()
-        is PartialValue.Value -> value
+        is Partial.Missing -> block()
+        is Partial.Value -> value
     }
 }
 
-public fun <T> PartialValue<T>.getOrNull(): T? = getOrElse { null }
+public fun <T> Partial<T>.getOrNull(): T? = getOrElse { null }
 
-public inline fun <T, R> PartialValue<T>.mapToPartial(block: (T) -> R): PartialValue<R> {
+public inline fun <T, R> Partial<T>.mapToPartial(block: (T) -> R): Partial<R> {
     return when (this) {
-        is PartialValue.Missing -> this
-        is PartialValue.Value -> PartialValue.Value(block(value))
+        is Partial.Missing -> this
+        is Partial.Value -> Partial.Value(block(value))
     }
 }

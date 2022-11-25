@@ -1,30 +1,31 @@
 package com.github.materiapps.partial
 
-import com.google.devtools.ksp.processing.CodeGenerator
-import com.google.devtools.ksp.processing.Dependencies
-import com.google.devtools.ksp.processing.Resolver
-import com.google.devtools.ksp.processing.SymbolProcessor
-import com.google.devtools.ksp.symbol.*
+import com.google.devtools.ksp.processing.*
+import com.google.devtools.ksp.symbol.ClassKind
+import com.google.devtools.ksp.symbol.KSAnnotated
+import com.google.devtools.ksp.symbol.KSClassDeclaration
+import com.google.devtools.ksp.symbol.KSVisitorVoid
 import com.google.devtools.ksp.validate
 import com.xinto.ksputil.*
 import java.io.OutputStream
 
-internal class PartialProcessor(val codeGenerator: CodeGenerator) : SymbolProcessor {
-
+internal class PartialProcessor(val environment: SymbolProcessorEnvironment) : SymbolProcessor {
     override fun process(resolver: Resolver): List<KSAnnotated> {
         val symbols = resolver.getSymbolsWithAnnotation(PARTIAL_ANNOTATION_IDENTIFIER)
-        val ret = symbols.filter { !it.validate() }.toList()
-        symbols
-            .filter { it is KSClassDeclaration && it.validate() }
+        val (valid, invalid) = symbols.partition { it.validate() }
+
+        valid
+            .filterIsInstance<KSClassDeclaration>()
             .forEach {
                 it.accept(PartialVisitor(), Unit)
             }
-        return ret
+
+        return invalid
     }
 
     inner class PartialVisitor : KSVisitorVoid() {
-
         override fun visitClassDeclaration(classDeclaration: KSClassDeclaration, data: Unit) {
+            println(data)
             if (classDeclaration.classKind != ClassKind.CLASS)
                 return
 
@@ -39,15 +40,13 @@ internal class PartialProcessor(val codeGenerator: CodeGenerator) : SymbolProces
 
             val imports = mutableListOf(
                 classQualifiedName,
-                "com.xinto.partialgen.PartialValue",
-                "com.xinto.partialgen.getOrElse",
+                "com.github.materiapps.partial.PartialValue",
+                "com.github.materiapps.partial.getOrElse",
             )
             val classAnnotations = classDeclaration.annotations
                 .mapNotNull { annotation ->
                     annotation.sourceAnnotation().let { (type, import) ->
-                        if (import != null) {
-                            imports.add(import)
-                        }
+                        import?.also { imports.add(it) }
 
                         if (import == PARTIAL_ANNOTATION_IDENTIFIER)
                             return@let null
@@ -62,17 +61,13 @@ internal class PartialProcessor(val codeGenerator: CodeGenerator) : SymbolProces
                 val name = parameter.name?.asString() ?: "<ERROR>"
                 val type = parameter.type.sourceType().let { (type, import) ->
                     imports.addAll(import.filterNotNull())
-
                     type
                 }
 
                 val annotations = parameter.annotations
                     .map { annotation ->
                         annotation.sourceAnnotation().let { (type, import) ->
-                            if (import != null) {
-                                imports.add(import)
-                            }
-
+                            import?.also { imports.add(it) }
                             type
                         }
                     }.toList()
@@ -80,7 +75,7 @@ internal class PartialProcessor(val codeGenerator: CodeGenerator) : SymbolProces
                 Triple(name, type, annotations)
             }
 
-            codeGenerator.createNewFile(
+            environment.codeGenerator.createNewFile(
                 dependencies = dependencies,
                 packageName = packageName,
                 fileName = partialClassShortName
@@ -104,6 +99,12 @@ internal class PartialProcessor(val codeGenerator: CodeGenerator) : SymbolProces
                     classShortName = classShortName,
                     partialClassShortName = partialClassShortName,
                     constructorParams = transformedConstructorParams
+                )
+
+                file.writeToPartialFunction(
+                    classShortName = classShortName,
+                    partialClassShortName = partialClassShortName,
+                    constructorParams = transformedConstructorParams,
                 )
             }
         }
@@ -131,7 +132,7 @@ internal class PartialProcessor(val codeGenerator: CodeGenerator) : SymbolProces
                     appendText(name)
                     appendText(": PartialValue<")
                     appendText(type)
-                    appendText("> = PartialValue.Missing,")
+                    appendTextNewline("> = PartialValue.Missing,")
                 }
             }
             appendTextDoubleNewline(")")
@@ -170,11 +171,41 @@ internal class PartialProcessor(val codeGenerator: CodeGenerator) : SymbolProces
             withIndent {
                 appendTextNewline(")")
             }
-            appendTextNewline("}")
+            appendTextDoubleNewline("}")
+        }
+
+        private fun OutputStream.writeToPartialFunction(
+            classShortName: String,
+            partialClassShortName: String,
+            constructorParams: List<Triple<String, String, List<String>>>,
+        ) {
+            appendTextSpaced("fun")
+            appendText(classShortName)
+            appendTextSpaced(".toPartial():")
+            appendTextSpaced(partialClassShortName)
+            appendTextNewline("{")
+            withIndent {
+                appendTextSpaced("return")
+                appendText(partialClassShortName)
+                appendTextNewline("(")
+                constructorParams.forEach { (name, _, _) ->
+                    withIndent(2) {
+                        appendTextSpaced(name)
+                        appendTextSpaced("=")
+                        appendText("PartialValue.Value(")
+                        appendText(name)
+                        appendTextNewline("),")
+                    }
+                }
+            }
+            withIndent {
+                appendTextNewline(")")
+            }
+            appendTextDoubleNewline("}")
         }
     }
 
     companion object {
-        const val PARTIAL_ANNOTATION_IDENTIFIER = "com.xinto.partialgen.Partialable"
+        const val PARTIAL_ANNOTATION_IDENTIFIER = "com.github.materiapps.partial.Partialize"
     }
 }
