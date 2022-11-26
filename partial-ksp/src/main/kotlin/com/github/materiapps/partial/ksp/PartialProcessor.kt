@@ -4,10 +4,7 @@ import com.google.devtools.ksp.processing.CodeGenerator
 import com.google.devtools.ksp.processing.Dependencies
 import com.google.devtools.ksp.processing.Resolver
 import com.google.devtools.ksp.processing.SymbolProcessor
-import com.google.devtools.ksp.symbol.ClassKind
-import com.google.devtools.ksp.symbol.KSAnnotated
-import com.google.devtools.ksp.symbol.KSClassDeclaration
-import com.google.devtools.ksp.symbol.KSVisitorVoid
+import com.google.devtools.ksp.symbol.*
 import com.google.devtools.ksp.validate
 import com.squareup.kotlinpoet.*
 import com.squareup.kotlinpoet.ParameterizedTypeName.Companion.parameterizedBy
@@ -64,7 +61,7 @@ internal class PartialProcessor(val codeGenerator: CodeGenerator) : SymbolProces
             val parameters = mutableListOf<ParameterSpec>()
 
             classDeclaration.annotations.forEach {
-                if (it.annotationType.resolve().declaration.qualifiedName?.asString() != PARTIAL_ANNOTATION_IDENTIFIER) {
+                if (it.qualifier() != PARTIAL_ANNOTATION_IDENTIFIER) {
                     annotations.add(it.toAnnotationSpec())
                 }
             }
@@ -134,6 +131,31 @@ internal class PartialProcessor(val codeGenerator: CodeGenerator) : SymbolProces
                     partialClass
                 )
                 .build()
+        }
+
+        private fun KSAnnotation.qualifier(): String {
+            val declaration = annotationType.resolve().declaration
+            return buildString {
+                append('@')
+                append(declaration.simpleName.getShortName())
+
+                append(arguments.joinToString(prefix = "(", postfix = ")") {
+                    when (val value = it.value) {
+                        is String -> "\"${value}\""
+                        is KSType -> {
+                            /* FIXME
+                                There's a compiler bug in Kotlin IR which produces a
+                                "Collection contains no element matching the predicate."
+                                error if a KClass parameter is passed to an annotation.
+                             */
+                            ""
+//                            val t = value.declaration.qualifiedName?.asString() + "::class"
+//                            if (t == "kotlinx.serialization.KSerializer::class") "" else t
+                        }
+                        else -> value.toString()
+                    }
+                })
+            }
         }
     }
 
