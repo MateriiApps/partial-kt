@@ -1,8 +1,9 @@
 package com.github.materiapps.partial.ksp
 
-import com.github.materiapps.partial.Partial
-import com.github.materiapps.partial.PartialValue
-import com.google.devtools.ksp.processing.*
+import com.google.devtools.ksp.processing.CodeGenerator
+import com.google.devtools.ksp.processing.Dependencies
+import com.google.devtools.ksp.processing.Resolver
+import com.google.devtools.ksp.processing.SymbolProcessor
 import com.google.devtools.ksp.symbol.ClassKind
 import com.google.devtools.ksp.symbol.KSAnnotated
 import com.google.devtools.ksp.symbol.KSClassDeclaration
@@ -13,6 +14,9 @@ import com.squareup.kotlinpoet.ParameterizedTypeName.Companion.parameterizedBy
 import com.squareup.kotlinpoet.ksp.*
 
 internal class PartialProcessor(val codeGenerator: CodeGenerator) : SymbolProcessor {
+    val partialValueClassName = ClassName("com.github.materiapps.partial", "Partial")
+    val partialInterfaceClassName = ClassName("com.github.materiapps.partial", "Partialable")
+
     override fun process(resolver: Resolver): List<KSAnnotated> {
         val symbols = resolver.getSymbolsWithAnnotation(PARTIAL_ANNOTATION_IDENTIFIER)
         val (valid, invalid) = symbols.partition { it.validate() }
@@ -36,7 +40,7 @@ internal class PartialProcessor(val codeGenerator: CodeGenerator) : SymbolProces
             val partialClassName = "${className}Partial"
 
             FileSpec.builder(packageName, partialClassName)
-                .addImport("com.github.materiapps.partial", "getOrElse")
+                .addImport("com.github.materiapps.partial", "getOrElse", "Partial", "Partialable")
                 .addImport(classDeclaration.packageName.asString(), className)
                 .addFileComment(
                     """
@@ -65,14 +69,15 @@ internal class PartialProcessor(val codeGenerator: CodeGenerator) : SymbolProces
             }
             classDeclaration.primaryConstructor!!.parameters.forEach {
                 val name = it.name!!.asString()
-                val type = PartialValue::class.asClassName().parameterizedBy(it.type.toTypeName())
+                val type = partialValueClassName.parameterizedBy(it.type.toTypeName())
 
                 properties.add(PropertySpec.builder(name, type).initializer(name).build())
-                parameters.add(ParameterSpec.builder(name, type).defaultValue("PartialValue.Missing").build())
+                parameters.add(ParameterSpec.builder(name, type).defaultValue("Partial.Missing").build())
             }
 
             return TypeSpec
                 .classBuilder(partialClassName)
+                .addModifiers(classDeclaration.modifiers.mapNotNull { it.toKModifier() })
                 .addAnnotations(annotations)
                 .primaryConstructor(
                     FunSpec.constructorBuilder()
@@ -80,7 +85,7 @@ internal class PartialProcessor(val codeGenerator: CodeGenerator) : SymbolProces
                         .build()
                 )
                 .addProperties(properties)
-                .addSuperinterface(Partial::class.asClassName().parameterizedBy(classDeclaration.toClassName()))
+                .addSuperinterface(partialInterfaceClassName.parameterizedBy(classDeclaration.toClassName()))
                 .addFunction(makeMergeFunction(classDeclaration))
                 .build()
         }
@@ -93,11 +98,10 @@ internal class PartialProcessor(val codeGenerator: CodeGenerator) : SymbolProces
                 .addModifiers(KModifier.OVERRIDE)
                 .returns(className)
                 .addParameter("full", className)
-                .addCode("""
-                    return %T(
-                        ${parameters.joinToString(separator = ",\n") { "$it = $it.getOrElse { full.$it }" }}
-                    )
-                """.trimIndent(), className)
+                .addStatement(
+                    "return %T(${parameters.joinToString(postfix = "\n") { "\n        $it = $it.getOrElse { full.$it }" }})",
+                    className
+                )
                 .build()
         }
 
@@ -108,11 +112,10 @@ internal class PartialProcessor(val codeGenerator: CodeGenerator) : SymbolProces
             return FunSpec.builder("toPartial")
                 .receiver(classDeclaration.toClassName())
                 .returns(partialClass)
-                .addCode("""
-                    return %T(
-                        ${parameters.joinToString(separator = ",\n") { "$it = PartialValue.Value($it)" }}
-                    )
-                """.trimIndent(), partialClass)
+                .addStatement(
+                    "return %T(${parameters.joinToString(postfix = "\n") { "\n        $it = Partial.Value($it)" }})",
+                    partialClass
+                )
                 .build()
         }
     }

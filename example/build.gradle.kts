@@ -10,6 +10,7 @@ dependencies {
 
 kotlin {
     jvmToolchain(11)
+
     sourceSets {
         getByName("main") {
             kotlin.srcDir("build/generated/ksp/main/kotlin")

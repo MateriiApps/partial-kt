@@ -1,12 +1,12 @@
 package com.github.materiapps.partial.example
 
-import com.github.materiapps.partial.PartialValue
+import com.github.materiapps.partial.Partial
 import com.github.materiapps.partial.Partialize
 
-annotation class ExampleThirdPartyAnnotation
+annotation class SampleAnnotation
 
 @Partialize
-@ExampleThirdPartyAnnotation
+@SampleAnnotation
 data class User(
     val name: String,
     val age: Int,
@@ -14,7 +14,7 @@ data class User(
 
 fun main() {
     val gregory14 = User(name = "Gregory", age = 14)
-    val mariaNoAge = UserPartial(name = PartialValue.Value("maria"))
+    val mariaNoAge = UserPartial(name = Partial.Value("maria"))
     val merged = mariaNoAge.merge(gregory14)
     println(merged)
 }
