@@ -130,16 +130,12 @@ internal class PartialProcessor(val codeGenerator: CodeGenerator) : SymbolProces
         private fun makeExtMergeFunction(partialClassName: String, classDeclaration: KSClassDeclaration): FunSpec {
             val className = classDeclaration.toClassName()
             val partialClass = ClassName(classDeclaration.packageName.asString(), partialClassName)
-            val parameters = classDeclaration.primaryConstructor!!.parameters.map { it.name!!.asString() }
 
             return FunSpec.builder("merge")
                 .receiver(className)
                 .addParameter("partial", partialClass)
                 .returns(className)
-                .addStatement(
-                    "return %T(${parameters.joinToString(postfix = "\n") { "\n        $it = partial.$it.getOrElse { $it }" }})",
-                    className
-                )
+                .addStatement("return partial.merge(this)")
                 .build()
         }
 
