@@ -7,3 +7,7 @@ subprojects {
         google()
     }
 }
+
+task<Delete>("clean") {
+    delete(rootProject.buildDir)
+}
