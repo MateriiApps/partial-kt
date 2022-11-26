@@ -50,6 +50,7 @@ internal class PartialProcessor(val codeGenerator: CodeGenerator) : SymbolProces
                 )
                 .addType(makePartialClass(partialClassName, classDeclaration))
                 .addFunction(makeToPartialFunction(partialClassName, classDeclaration))
+                .addFunction(makeExtMergeFunction(partialClassName, classDeclaration))
                 .build()
                 .writeTo(
                     codeGenerator = codeGenerator,
@@ -100,6 +101,22 @@ internal class PartialProcessor(val codeGenerator: CodeGenerator) : SymbolProces
                 .addParameter("full", className)
                 .addStatement(
                     "return %T(${parameters.joinToString(postfix = "\n") { "\n        $it = $it.getOrElse { full.$it }" }})",
+                    className
+                )
+                .build()
+        }
+
+        private fun makeExtMergeFunction(partialClassName: String, classDeclaration: KSClassDeclaration): FunSpec {
+            val className = classDeclaration.toClassName()
+            val partialClass = ClassName(classDeclaration.packageName.asString(), partialClassName)
+            val parameters = classDeclaration.primaryConstructor!!.parameters.map { it.name!!.asString() }
+
+            return FunSpec.builder("merge")
+                .receiver(className)
+                .addParameter("partial", partialClass)
+                .returns(className)
+                .addStatement(
+                    "return %T(${parameters.joinToString(postfix = "\n") { "\n        $it = partial.$it.getOrElse { $it }" }})",
                     className
                 )
                 .build()
