@@ -1,4 +1,4 @@
-package com.github.materiapps.partial
+package com.github.materiiapps.partial
 
 /**
  * Generates a Partial subclass with all constructor parameters

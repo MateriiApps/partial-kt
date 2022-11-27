@@ -1,4 +1,4 @@
-package com.github.materiapps.partial.ksp
+package com.github.materiiapps.partial.ksp
 
 import com.google.devtools.ksp.processing.SymbolProcessor
 import com.google.devtools.ksp.processing.SymbolProcessorEnvironment

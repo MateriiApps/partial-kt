@@ -1,4 +1,4 @@
-package com.github.materiapps.partial.ksp
+package com.github.materiiapps.partial.ksp
 
 import com.google.devtools.ksp.processing.CodeGenerator
 import com.google.devtools.ksp.processing.Dependencies
@@ -11,8 +11,8 @@ import com.squareup.kotlinpoet.ParameterizedTypeName.Companion.parameterizedBy
 import com.squareup.kotlinpoet.ksp.*
 
 internal class PartialProcessor(val codeGenerator: CodeGenerator) : SymbolProcessor {
-    val partialValueClassName = ClassName("com.github.materiapps.partial", "Partial")
-    val partialInterfaceClassName = ClassName("com.github.materiapps.partial", "Partialable")
+    val partialValueClassName = ClassName("com.github.materiiapps.partial", "Partial")
+    val partialInterfaceClassName = ClassName("com.github.materiiapps.partial", "Partialable")
 
     override fun process(resolver: Resolver): List<KSAnnotated> {
         val symbols = resolver.getSymbolsWithAnnotation(PARTIAL_ANNOTATION_IDENTIFIER)
@@ -37,7 +37,7 @@ internal class PartialProcessor(val codeGenerator: CodeGenerator) : SymbolProces
             val partialClassName = "${className}Partial"
 
             FileSpec.builder(packageName, partialClassName)
-                .addImport("com.github.materiapps.partial", "getOrElse", "Partial", "Partialable")
+                .addImport("com.github.materiiapps.partial", "getOrElse", "Partial", "Partialable")
                 .addImport(classDeclaration.packageName.asString(), className)
                 .addFileComment(
                     """
@@ -155,6 +155,6 @@ internal class PartialProcessor(val codeGenerator: CodeGenerator) : SymbolProces
     }
 
     companion object {
-        const val PARTIAL_ANNOTATION_IDENTIFIER = "com.github.materiapps.partial.Partialize"
+        const val PARTIAL_ANNOTATION_IDENTIFIER = "com.github.materiiapps.partial.Partialize"
     }
 }

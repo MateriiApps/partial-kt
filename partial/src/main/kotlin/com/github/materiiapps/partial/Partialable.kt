@@ -1,4 +1,4 @@
-package com.github.materiapps.partial
+package com.github.materiiapps.partial
 
 /**
  * Base class that all generated partial values extend from.

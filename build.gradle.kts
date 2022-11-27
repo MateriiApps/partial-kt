@@ -1,5 +1,5 @@
 subprojects {
-    group = "io.github.materiapps"
+    group = "io.github.materiiapps"
     version = "1.0.0"
 
     repositories {

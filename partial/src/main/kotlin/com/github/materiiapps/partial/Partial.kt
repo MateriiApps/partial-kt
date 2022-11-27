@@ -1,7 +1,7 @@
 @file:JvmName("PartialableKt")
 @file:Suppress("NOTHING_TO_INLINE")
 
-package com.github.materiapps.partial
+package com.github.materiiapps.partial
 
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable

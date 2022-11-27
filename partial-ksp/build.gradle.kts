@@ -44,7 +44,7 @@ publishing {
             pom {
                 name.set("partial-kt")
                 description.set("A Kotlin KSP plugin for generating partial variants of classes.")
-                url.set("https://github.com/MateriApps/partial-kt")
+                url.set("https://github.com/MateriiApps/partial-kt")
                 licenses {
                     name.set("The Apache License, Version 2.0")
                     url.set("https://www.apache.org/licenses/LICENSE-2.0.txt")
@@ -63,9 +63,9 @@ publishing {
                     }
                 }
                 scm {
-                    url.set("https://github.com/MateriApps/partial-kt")
-                    connection.set("scm:git:github.com/MateriApps/partial-kt.git")
-                    developerConnection.set("scm:git:ssh://github.com/MateriApps/partial-kt.git")
+                    url.set("https://github.com/MateriiApps/partial-kt")
+                    connection.set("scm:git:github.com/MateriiApps/partial-kt.git")
+                    developerConnection.set("scm:git:ssh://github.com/MateriiApps/partial-kt.git")
                 }
             }
         }

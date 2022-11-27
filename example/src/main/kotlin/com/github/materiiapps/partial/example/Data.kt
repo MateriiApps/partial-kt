@@ -1,7 +1,7 @@
-package com.github.materiapps.partial.example
+package com.github.materiiapps.partial.example
 
-import com.github.materiapps.partial.Partial
-import com.github.materiapps.partial.Partialize
+import com.github.materiiapps.partial.Partial
+import com.github.materiiapps.partial.Partialize
 
 annotation class SampleAnnotation
 
