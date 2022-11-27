@@ -27,12 +27,6 @@ tasks.withType<ShadowJar> {
     }
 }
 
-signing {
-    if (findProperty("signing.secretKeyRingFile") != null) {
-        sign(publishing.publications)
-    }
-}
-
 publishing {
     publications {
         register(project.name, MavenPublication::class) {
@@ -77,6 +71,10 @@ publishing {
         if (sonatypeUsername == null || sonatypePassword == null)
             mavenLocal()
         else {
+            signing {
+                sign(publishing.publications)
+            }
+
             maven {
                 credentials {
                     username = sonatypeUsername
