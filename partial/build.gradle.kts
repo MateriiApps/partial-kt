@@ -24,10 +24,16 @@ tasks.withType<KotlinCompile> {
     }
 }
 
+task<Jar>("javadocJar") {
+    from(tasks["javadoc"].outputs)
+    archiveClassifier.set("javadoc")
+}
+
 publishing {
     publications {
         register(project.name, MavenPublication::class) {
             artifact(tasks["kotlinSourcesJar"])
+            artifact(tasks["javadocJar"])
             artifact(tasks["jar"]) {
                 classifier = null
             }
