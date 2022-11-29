@@ -40,8 +40,10 @@ publishing {
                 description.set("A Kotlin KSP plugin for generating partial variants of classes.")
                 url.set("https://github.com/MateriiApps/partial-kt")
                 licenses {
-                    name.set("The Apache License, Version 2.0")
-                    url.set("https://www.apache.org/licenses/LICENSE-2.0.txt")
+                    license {
+                        name.set("The Apache License, Version 2.0")
+                        url.set("https://www.apache.org/licenses/LICENSE-2.0.txt")
+                    }
                 }
                 developers {
                     developer {
