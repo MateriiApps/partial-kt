@@ -1,4 +1,4 @@
-name: Build & publish release
+name: Publish release
 
 concurrency:
   group: "release"
@@ -13,9 +13,9 @@ on:
 # Required actions secrets:
 # SONATYPE_USERNAME: sonatype staging repo user token username
 # SONATYPE_PASSWORD: sonatype staging repo user token password
-# GPG_KEY: base64 encoded gpg signing key (gpg --export-secret-keys <KEY_IDENTIFIER> | base64)
-# GPG_KEY_ID: last 8 chars of fingerprint (gpg --list-keys --keyid-format short)
-# GPG_KEY_PASSWORD: password for key with that id
+# SIGNING_KEY_ID: last 8 chars of master/(singing) subkey fingerprint (gpg --list-keys --keyid-format short)
+# SIGNING_KEY: an armored gpg key: (gpg --armor --export-secret-key <MASTER_ID>) OR (gpg --armor --export-secret-subkey <SHORT_ID>!)
+# SIGNING_PASSWORD: password for key-block
 
 jobs:
   build:
@@ -35,12 +35,6 @@ jobs:
           distribution: zulu
           cache: gradle
 
-      - name: Configure GPG Key
-        env:
-          GPG_SIGNING_KEY: ${{ secrets.GPG_KEY }}
-        run: |
-          echo -n "$GPG_SIGNING_KEY" | base64 --decode > $GITHUB_WORKSPACE/release-secring.gpg
-
       - name: Test version
         id: version
         run: |
@@ -57,13 +51,13 @@ jobs:
         env:
           SONATYPE_USERNAME: ${{ secrets.SONATYPE_USERNAME }}
           SONATYPE_PASSWORD: ${{ secrets.SONATYPE_PASSWORD }}
-          ORG_GRADLE_PROJECT_signing.secretKeyRingFile: $GITHUB_WORKSPACE/release-secring.gpg
-          ORG_GRADLE_PROJECT_signing.keyId: ${{ secrets.GPG_KEY_ID }}
-          ORG_GRADLE_PROJECT_signing.password: ${{ secrets.GPG_KEY_PASSWORD }}
+          SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
+          SIGNING_KEY_ID: ${{ secrets.SIGNING_KEY_ID }}
+          SIGNING_PASSWORD: ${{ secrets.SIGNING_PASSWORD }}
         run: |
           cd $GITHUB_WORKSPACE/src
           chmod +x gradlew
-          ./gradlew publishToMavenLocal publish --no-daemon
+          ./gradlew publishToMavenLocal publish --no-daemon --stacktrace
 
       - name: Prepare Release
         run: |

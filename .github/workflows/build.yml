@@ -31,4 +31,4 @@ jobs:
       - name: Build partial-kt
         run: |
           chmod +x gradlew
-          ./gradlew :example:build publishToMavenLocal --no-daemon
+          ./gradlew :example:build publishToMavenLocal --no-daemon --stacktrace
