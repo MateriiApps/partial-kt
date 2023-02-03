@@ -9,6 +9,8 @@ annotation class SampleAnnotation
 @SampleAnnotation
 data class User(
     val name: String,
+
+    @SampleAnnotation
     val age: Int,
 )
 

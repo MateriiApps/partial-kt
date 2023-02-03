@@ -61,40 +61,35 @@ internal class PartialProcessor(val codeGenerator: CodeGenerator) : SymbolProces
             val parameters = mutableListOf<ParameterSpec>()
 
             classDeclaration.annotations.forEach { annotation ->
-                val declaration = annotation.annotationType.resolve().declaration
-
-                if (declaration.qualifiedName?.asString() != PARTIAL_ANNOTATION_IDENTIFIER) {
-                    annotations.add(
-                        AnnotationSpec.builder(ClassName(declaration.packageName.asString(), declaration.simpleName.asString()))
-                            .also { builder ->
-                                if (annotation.arguments.isNotEmpty()) {
-                                    builder.addMember(annotation.arguments.joinToString {
-                                        when (it.value) {
-                                            is String -> "\"${it.value}\""
-                                            is KSType -> {
-                                                /* FIXME
-                                                    There's a compiler bug in Kotlin IR which produces a
-                                                    "Collection contains no element matching the predicate."
-                                                    error if a KClass parameter is passed to an annotation.
-                                                 */
-                                                ""
-//                            val t = value.declaration.qualifiedName?.asString() + "::class"
-//                            if (t == "kotlinx.serialization.KSerializer::class") "" else t
-                                            }
-                                            else -> it.value.toString()
-                                        }
-                                    })
-                                }
-                            }
-                            .build())
+                createAnnotation(annotation)?.let {
+                    annotations.add(it)
                 }
             }
-            classDeclaration.primaryConstructor!!.parameters.forEach {
-                val name = it.name!!.asString()
-                val type = partialValueClassName.parameterizedBy(it.type.toTypeName())
+            classDeclaration.primaryConstructor!!.parameters.forEach { parameter ->
+                val name = parameter.name!!.asString()
+                val type = partialValueClassName.parameterizedBy(parameter.type.toTypeName())
 
-                properties.add(PropertySpec.builder(name, type).initializer(name).build())
-                parameters.add(ParameterSpec.builder(name, type).defaultValue("Partial.Missing").build())
+                val paramAnnotations = mutableListOf<AnnotationSpec>()
+
+                parameter.annotations.forEach { annotation ->
+                    createAnnotation(annotation)?.let {
+                        paramAnnotations.add(it)
+                    }
+                }
+
+                properties.add(
+                    PropertySpec
+                        .builder(name, type)
+                        .addAnnotations(paramAnnotations)
+                        .initializer(name)
+                        .build()
+                )
+                parameters.add(
+                    ParameterSpec
+                        .builder(name, type)
+                        .defaultValue("Partial.Missing")
+                        .build()
+                )
             }
 
             return TypeSpec
@@ -151,6 +146,39 @@ internal class PartialProcessor(val codeGenerator: CodeGenerator) : SymbolProces
                     partialClass
                 )
                 .build()
+        }
+
+        private fun createAnnotation(annotation: KSAnnotation): AnnotationSpec? {
+            val declaration = annotation.annotationType.resolve().declaration
+
+            return if (declaration.qualifiedName?.asString() != PARTIAL_ANNOTATION_IDENTIFIER) {
+                AnnotationSpec.builder(
+                    ClassName(
+                        declaration.packageName.asString(),
+                        declaration.simpleName.asString()
+                    )
+                ).also { builder ->
+                    if (annotation.arguments.isNotEmpty()) {
+                        builder.addMember(annotation.arguments.joinToString {
+                            when (it.value) {
+                                is String -> "\"${it.value}\""
+                                is KSType -> {
+                                    /* FIXME
+                                            There's a compiler bug in Kotlin IR which produces a
+                                            "Collection contains no element matching the predicate."
+                                            error if a KClass parameter is passed to an annotation.
+                                         */
+                                    ""
+//                            val t = value.declaration.qualifiedName?.asString() + "::class"
+//                            if (t == "kotlinx.serialization.KSerializer::class") "" else t
+                                }
+
+                                else -> it.value.toString()
+                            }
+                        })
+                    }
+                }.build()
+            } else null
         }
     }
 
