@@ -43,10 +43,13 @@ intellisense. The generated file will have the following:
 data class User(
     val name: String,
     val age: Int,
+    
+    @SerialName("parent_age") //custom annotations on fields are also preserved.
+    val parentAge: Int
 )
 
 fun main() {
-    val gregory14 = User(name = "Gregory", age = 14)
+    val gregory14 = User(name = "Gregory", age = 14, parentAge = 36)
     val mariaNoAge = UserPartial(name = Partial.Value("maria"))
     val merged = mariaNoAge.merge(gregory14)
     println(merged)
