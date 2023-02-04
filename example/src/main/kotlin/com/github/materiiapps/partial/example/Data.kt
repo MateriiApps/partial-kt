@@ -2,15 +2,19 @@ package com.github.materiiapps.partial.example
 
 import com.github.materiiapps.partial.Partial
 import com.github.materiiapps.partial.Partialize
+import kotlin.reflect.KClass
 
-annotation class SampleAnnotation
+annotation class SampleAnnotation(
+    val a: Int,
+    val b: KClass<*>,
+)
 
 @Partialize
-@SampleAnnotation
+@SampleAnnotation(0, User::class)
 data class User(
     val name: String,
 
-    @SampleAnnotation
+    @SampleAnnotation(0, User::class)
     val age: Int,
 )
 

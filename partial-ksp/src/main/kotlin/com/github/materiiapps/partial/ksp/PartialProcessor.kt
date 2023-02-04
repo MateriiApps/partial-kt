@@ -1,16 +1,17 @@
 package com.github.materiiapps.partial.ksp
 
-import com.google.devtools.ksp.processing.CodeGenerator
-import com.google.devtools.ksp.processing.Dependencies
-import com.google.devtools.ksp.processing.Resolver
-import com.google.devtools.ksp.processing.SymbolProcessor
+import com.google.devtools.ksp.processing.*
 import com.google.devtools.ksp.symbol.*
 import com.google.devtools.ksp.validate
 import com.squareup.kotlinpoet.*
 import com.squareup.kotlinpoet.ParameterizedTypeName.Companion.parameterizedBy
-import com.squareup.kotlinpoet.ksp.*
+import com.squareup.kotlinpoet.ksp.toClassName
+import com.squareup.kotlinpoet.ksp.toKModifier
+import com.squareup.kotlinpoet.ksp.toTypeName
+import com.squareup.kotlinpoet.ksp.writeTo
 
-internal class PartialProcessor(val codeGenerator: CodeGenerator) : SymbolProcessor {
+internal class PartialProcessor(val codeGenerator: CodeGenerator, val version: KotlinVersion, val logger: KSPLogger) :
+    SymbolProcessor {
     val partialValueClassName = ClassName("com.github.materiiapps.partial", "Partial")
     val partialInterfaceClassName = ClassName("com.github.materiiapps.partial", "Partialable")
 
@@ -161,19 +162,40 @@ internal class PartialProcessor(val codeGenerator: CodeGenerator) : SymbolProces
                     if (annotation.arguments.isNotEmpty()) {
                         builder.addMember(annotation.arguments.joinToString {
                             when (it.value) {
+                                null -> "null"
                                 is String -> "\"${it.value}\""
+                                is Char -> "'${it.value}'"
+
+                                is Boolean,
+                                is Byte,
+                                is Short,
+                                is Int,
+                                is Long,
+                                is Float,
+                                is Double,
+                                -> it.value.toString()
+
                                 is KSType -> {
-                                    /* FIXME
-                                            There's a compiler bug in Kotlin IR which produces a
-                                            "Collection contains no element matching the predicate."
-                                            error if a KClass parameter is passed to an annotation.
-                                         */
-                                    ""
-//                            val t = value.declaration.qualifiedName?.asString() + "::class"
-//                            if (t == "kotlinx.serialization.KSerializer::class") "" else t
+                                    /*
+                                       There's a compiler bug in <1.8 Kotlin IR which produces a
+                                       "Collection contains no element matching the predicate."
+                                       error if a KClass parameter is passed to an annotation.
+                                    */
+                                    if (version.isAtLeast(1, 8)) {
+                                        (it.value as KSType).declaration.qualifiedName?.asString() + "::class"
+                                    } else {
+                                        logger.warn(
+                                            "Cannot properly read KSType from annotation arguments in Kotlin versions <1.8. " +
+                                                    "As a workaround, converting the value to string. This may or may not work."
+                                        )
+                                        it.value.toString() + "::class"
+                                    }
                                 }
 
-                                else -> it.value.toString()
+                                else -> {
+                                    logger.warn("Unknown annotation argument type ${it.value?.javaClass?.simpleName}, converting to string")
+                                    it.value.toString()
+                                }
                             }
                         })
                     }
