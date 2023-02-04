@@ -3,18 +3,16 @@
 
 package com.github.materiiapps.partial
 
-import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.descriptors.SerialDescriptor
-import kotlinx.serialization.encoding.Decoder
-import kotlinx.serialization.encoding.Encoder
 
 /**
- * Represents a value that can be present or missing.
- * This is serializable.
+ * Represents a serializable ([PartialSerializer]) value that can be present or missing.
  */
 @Serializable(PartialSerializer::class)
 public sealed interface Partial<out T> {
+    /**
+     * Represents a value that exists (including null)
+     */
     public class Value<out T>(public val value: T) : Partial<T> {
         override fun toString(): String = value.toString()
 
@@ -26,6 +24,10 @@ public sealed interface Partial<out T> {
         override fun hashCode(): Int = value.hashCode()
     }
 
+    /**
+     * A missing value that does not get serialized.
+     * When deserializing, if the value is missing then it is represented with this.
+     */
     public object Missing : Partial<Nothing> {
         override fun toString(): String = "<Missing>"
 
@@ -35,34 +37,9 @@ public sealed interface Partial<out T> {
     }
 }
 
-internal class PartialSerializer<T>(
-    private val valueSerializer: KSerializer<T>,
-) : KSerializer<Partial<T?>> {
-    override val descriptor: SerialDescriptor
-        get() = valueSerializer.descriptor
-
-    override fun serialize(encoder: Encoder, value: Partial<T?>) {
-        if (value is Partial.Value) {
-            if (value.value != null) {
-                encoder.encodeNotNullMark()
-                encoder.encodeSerializableValue(valueSerializer, value.value)
-            } else {
-                encoder.encodeNull()
-            }
-        }
-    }
-
-    override fun deserialize(decoder: Decoder): Partial<T?> {
-        val value = if (!decoder.decodeNotNullMark()) {
-            decoder.decodeNull()
-        } else {
-            decoder.decodeSerializableValue(valueSerializer)
-        }
-
-        return Partial.Value(value)
-    }
-}
-
+/**
+ * Gets the present value or generate a value with [block] if it's missing.
+ */
 public inline fun <T> Partial<T>.getOrElse(crossinline block: () -> T): T {
     return when (this) {
         is Partial.Missing -> block()
@@ -70,8 +47,15 @@ public inline fun <T> Partial<T>.getOrElse(crossinline block: () -> T): T {
     }
 }
 
+/**
+ * Gets the present value or null if missing.
+ * **NOTE**: There is no way to differentiate between a present null value and missing with this function.
+ */
 public inline fun <T> Partial<T>.getOrNull(): T? = getOrElse { null }
 
+/**
+ * Transform a present value into another, doing nothing if missing.
+ */
 public inline fun <T, R> Partial<T>.map(block: (T) -> R): Partial<R> {
     return when (this) {
         is Partial.Missing -> this
