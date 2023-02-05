@@ -9,7 +9,6 @@ plugins {
 
 dependencies {
     api(kotlin("stdlib"))
-    api(project(":partial"))
     api("com.google.devtools.ksp:symbol-processing-api:1.8.10-1.0.9")
 
     val poetVersion = "1.12.0"

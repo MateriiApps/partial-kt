@@ -10,17 +10,37 @@ annotation class SampleAnnotation(
     val c: Array<KClass<*>>,
 )
 
+@Partialize(children = [
+    AgedUser::class,
+    UnknownUser::class
+])
+interface GenericUser {
+    val name: String
+}
+
 @Partialize
-@SampleAnnotation(0, User::class, [User::class])
-data class User(
-    @SampleAnnotation(0, User::class, [])
+@SampleAnnotation(0, AgedUser::class, [AgedUser::class])
+data class AgedUser(
+    @SampleAnnotation(0, AgedUser::class, [])
+    override val name: String,
 
     val age: Int,
-)
+) : GenericUser
+
+@Partialize
+data class UnknownUser(
+    override val name: String,
+    val deleted: Boolean,
+) : GenericUser
 
 fun main() {
-    val gregory14 = User(name = "Gregory", age = 14)
-    val mariaNoAge = UserPartial(name = Partial.Value("maria"))
-    val merged = mariaNoAge.merge(gregory14)
+    val full = AgedUser(name = "Gregory", age = 14)
+    val partial = AgedUserPartial(age = Partial.Value(15))
+    val merged = full.merge(partial)
     println(merged)
+
+    val generic: GenericUser = merged
+    val newData: GenericUserPartial = AgedUserPartial(age = Partial.Value(15)) // must be of "same" type's partial
+    val merged2 = generic.merge(newData)
+    println(merged2)
 }
