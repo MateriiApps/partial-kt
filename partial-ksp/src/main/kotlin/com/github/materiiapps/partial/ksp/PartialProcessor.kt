@@ -117,7 +117,7 @@ internal class PartialProcessor(val codeGenerator: CodeGenerator, val version: K
                 .returns(className)
                 .addParameter("full", className)
                 .addStatement(
-                    "return %T(${parameters.joinToString(postfix = "\n") { "\n        $it = $it.getOrElse { full.$it }" }})",
+                    "return %T(${parameters.joinToString(postfix = "\n") { "\n  $it = $it.getOrElse { full.$it }" }})",
                     className
                 )
                 .build()
@@ -143,7 +143,7 @@ internal class PartialProcessor(val codeGenerator: CodeGenerator, val version: K
                 .receiver(classDeclaration.toClassName())
                 .returns(partialClass)
                 .addStatement(
-                    "return %T(${parameters.joinToString(postfix = "\n") { "\n        $it = Partial.Value($it)" }})",
+                    "return %T(${parameters.joinToString(postfix = "\n") { "\n  $it = Partial.Value($it)" }})",
                     partialClass
                 )
                 .build()
@@ -160,11 +160,11 @@ internal class PartialProcessor(val codeGenerator: CodeGenerator, val version: K
                     )
                 ).also { builder ->
                     if (annotation.arguments.isNotEmpty()) {
-                        builder.addMember(annotation.arguments.joinToString {
-                            when (it.value) {
+                        builder.addMember(annotation.arguments.joinToString { argument ->
+                            fun valueToString(value: Any?): CharSequence = when (value) {
                                 null -> "null"
-                                is String -> "\"${it.value}\""
-                                is Char -> "'${it.value}'"
+                                is String -> "\"${value}\""
+                                is Char -> "'${value}'"
 
                                 is Boolean,
                                 is Byte,
@@ -173,7 +173,14 @@ internal class PartialProcessor(val codeGenerator: CodeGenerator, val version: K
                                 is Long,
                                 is Float,
                                 is Double,
-                                -> it.value.toString()
+                                -> value.toString()
+
+                                is ArrayList<*>,
+                                is Array<*> -> (value as Iterable<*>).joinToString(
+                                    prefix = "[",
+                                    postfix = "]",
+                                    transform = ::valueToString,
+                                )
 
                                 is KSType -> {
                                     /*
@@ -182,21 +189,27 @@ internal class PartialProcessor(val codeGenerator: CodeGenerator, val version: K
                                        error if a KClass parameter is passed to an annotation.
                                     */
                                     if (version.isAtLeast(1, 8)) {
-                                        (it.value as KSType).declaration.qualifiedName?.asString() + "::class"
+                                        value.declaration.qualifiedName?.asString() + "::class"
                                     } else {
                                         logger.warn(
                                             "Cannot properly read KSType from annotation arguments in Kotlin versions <1.8. " +
-                                                    "As a workaround, converting the value to string. This may or may not work."
+                                                    "As a workaround, converting the value to string. This may or may not work.",
+                                            symbol = argument
                                         )
-                                        it.value.toString() + "::class"
+                                        "$value::class"
                                     }
                                 }
 
                                 else -> {
-                                    logger.warn("Unknown annotation argument type ${it.value?.javaClass?.simpleName}, converting to string")
-                                    it.value.toString()
+                                    logger.warn(
+                                        "Unknown annotation argument type ${value.javaClass.simpleName}, converting to string",
+                                        symbol = argument
+                                    )
+                                    value.toString()
                                 }
                             }
+
+                            valueToString(argument.value)
                         })
                     }
                 }.build()

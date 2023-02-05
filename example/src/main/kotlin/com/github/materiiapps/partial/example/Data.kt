@@ -7,14 +7,14 @@ import kotlin.reflect.KClass
 annotation class SampleAnnotation(
     val a: Int,
     val b: KClass<*>,
+    val c: Array<KClass<*>>,
 )
 
 @Partialize
-@SampleAnnotation(0, User::class)
+@SampleAnnotation(0, User::class, [User::class])
 data class User(
-    val name: String,
+    @SampleAnnotation(0, User::class, [])
 
-    @SampleAnnotation(0, User::class)
     val age: Int,
 )
 
