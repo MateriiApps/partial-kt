@@ -2,6 +2,7 @@ package com.github.materiiapps.partial.example
 
 import com.github.materiiapps.partial.Partial
 import com.github.materiiapps.partial.Partialize
+import com.github.materiiapps.partial.Required
 import kotlin.reflect.KClass
 
 annotation class SampleAnnotation(
@@ -30,6 +31,8 @@ data class AgedUser(
 @Partialize
 data class UnknownUser(
     override val name: String,
+
+    @Required // marks this field to not be boxed (always present)
     val deleted: Boolean,
 ) : GenericUser
 

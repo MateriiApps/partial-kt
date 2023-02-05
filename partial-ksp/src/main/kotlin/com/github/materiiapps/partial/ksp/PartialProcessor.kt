@@ -17,7 +17,7 @@ internal class PartialProcessor(
     val logger: KSPLogger,
 ) : SymbolProcessor {
     override fun process(resolver: Resolver): List<KSAnnotated> {
-        val symbols = resolver.getSymbolsWithAnnotation(PARTIAL_ANNOTATION_IDENTIFIER)
+        val symbols = resolver.getSymbolsWithAnnotation(PARTIALIZE_QUALIFIED_NAME)
         val (valid, invalid) = symbols.partition { it.validate() }
 
         valid
@@ -36,7 +36,7 @@ internal class PartialProcessor(
             val partialClassName = "${className}Partial"
 
             val annotation = classDeclaration.annotations
-                .find { it.shortName.asString() == PARTIAL_ANNOTATION_NAME }!!
+                .find { it.annotationType.resolve().toClassName() == PARTIALIZE_CLASSNAME }!!
 
             @Suppress("UNCHECKED_CAST")
             val targetChildren = annotation.arguments
@@ -92,11 +92,21 @@ internal class PartialProcessor(
             return TypeSpec.interfaceBuilder(partialName)
                 .addModifiers(srcClass.modifiers.mapNotNull { it.toKModifier() })
                 .addProperties(
-                    srcClass.getDeclaredProperties().map {
+                    srcClass.getDeclaredProperties().map { property ->
+                        val isRequired = property.annotations.any {
+                            it.annotationType.resolve().toClassName() == REQUIRED_CLASSNAME
+                        }
+
+                        val type = if (isRequired) {
+                            property.type.toTypeName()
+                        } else {
+                            PARTIAL_CLASSNAME.parameterizedBy(property.type.toTypeName())
+                        }
+
                         PropertySpec.builder(
-                            it.simpleName.asString(),
-                            PARTIAL_CLASSNAME.parameterizedBy(it.type.toTypeName()),
-                            it.modifiers.mapNotNull { it.toKModifier() }
+                            property.simpleName.asString(),
+                            type,
+                            property.modifiers.mapNotNull { it.toKModifier() }
                         ).build()
                     }.toList()
                 )
@@ -134,7 +144,7 @@ internal class PartialProcessor(
 
             val partialSuperclasses = classDeclaration.superTypes
                 .mapNotNull { it.resolve().declaration as? KSClassDeclaration }
-                .filter { it.annotations.any { it.shortName.asString() == PARTIAL_ANNOTATION_NAME } }
+                .filter { it.annotations.any { it.annotationType.resolve().toClassName() == PARTIALIZE_CLASSNAME } }
                 .map {
                     val className = it.toClassName()
                     ClassName(className.packageName, "${className.simpleName}Partial")
@@ -146,10 +156,19 @@ internal class PartialProcessor(
 
             classDeclaration.getDeclaredProperties().forEach { property ->
                 val name = property.simpleName.asString()
-                val type = PARTIAL_CLASSNAME.parameterizedBy(property.type.toTypeName())
                 val paramAnnotations = property.annotations
                     .mapNotNull { createAnnotation(it) }
                     .toList()
+
+                val isRequired = property.annotations.any {
+                    it.annotationType.resolve().toClassName() == REQUIRED_CLASSNAME
+                }
+
+                val type = if (isRequired) {
+                    property.type.toTypeName()
+                } else {
+                    PARTIAL_CLASSNAME.parameterizedBy(property.type.toTypeName())
+                }
 
                 properties.add(
                     PropertySpec
@@ -162,7 +181,7 @@ internal class PartialProcessor(
                 parameters.add(
                     ParameterSpec
                         .builder(name, type)
-                        .defaultValue("Partial.Missing")
+                        .apply { if (!isRequired) defaultValue("Partial.Missing") }
                         .build()
                 )
             }
@@ -185,14 +204,27 @@ internal class PartialProcessor(
 
         private fun makeMergeFunction(classDeclaration: KSClassDeclaration): FunSpec {
             val className = classDeclaration.toClassName()
-            val parameters = classDeclaration.primaryConstructor!!.parameters.map { it.name!!.asString() }
+            val properties = classDeclaration.getDeclaredProperties().map { property ->
+                val isRequired = property.annotations.any {
+                    it.annotationType.resolve().toClassName() == REQUIRED_CLASSNAME
+                }
+
+                property.simpleName.asString() to isRequired
+            }
+
+            val stringParameters = properties.joinToString(postfix = "\n") { (name, isRequired) ->
+                if (isRequired)
+                    "\n  $name = $name"
+                else
+                    "\n  $name = $name.getOrElse { full.$name }"
+            }
 
             return FunSpec.builder("merge")
                 .addModifiers(KModifier.OVERRIDE)
                 .returns(className)
                 .addParameter("full", className)
                 .addStatement(
-                    "return %T(${parameters.joinToString(postfix = "\n") { "\n  $it = $it.getOrElse { full.$it }" }})",
+                    "return %T($stringParameters)",
                     className
                 )
                 .build()
@@ -212,28 +244,42 @@ internal class PartialProcessor(
 
         private fun makeToPartialFunction(partialClassName: String, classDeclaration: KSClassDeclaration): FunSpec {
             val partialClass = ClassName(classDeclaration.packageName.asString(), partialClassName)
-            val parameters = classDeclaration.primaryConstructor!!.parameters.map { it.name!!.asString() }
+            val properties = classDeclaration.getDeclaredProperties().map { property ->
+                val isRequired = property.annotations.any {
+                    it.annotationType.resolve().toClassName() == REQUIRED_CLASSNAME
+                }
+
+                property.simpleName.asString() to isRequired
+            }
+
+            val stringParameters = properties.joinToString(postfix = "\n") { (name, isRequired) ->
+                if (isRequired)
+                    "\n  $name = $name"
+                else
+                    "\n  $name = Partial.Value($name)"
+            }
 
             return FunSpec.builder("toPartial")
                 .receiver(classDeclaration.toClassName())
                 .returns(partialClass)
                 .addStatement(
-                    "return %T(${parameters.joinToString(postfix = "\n") { "\n  $it = Partial.Value($it)" }})",
+                    "return %T($stringParameters)",
                     partialClass
                 )
                 .build()
         }
 
         private fun createAnnotation(annotation: KSAnnotation): AnnotationSpec? {
-            val declaration = annotation.annotationType.resolve().declaration
+            val type = annotation.annotationType.resolve()
+            val className = type.toClassName()
 
-            if (declaration.qualifiedName?.asString() == PARTIAL_ANNOTATION_IDENTIFIER)
+            if (className == PARTIALIZE_CLASSNAME || className == REQUIRED_CLASSNAME)
                 return null
 
             return AnnotationSpec.builder(
                 ClassName(
-                    declaration.packageName.asString(),
-                    declaration.simpleName.asString()
+                    type.declaration.packageName.asString(),
+                    type.declaration.simpleName.asString()
                 )
             ).also { builder ->
                 if (annotation.arguments.isNotEmpty()) {
@@ -295,10 +341,13 @@ internal class PartialProcessor(
     }
 
     companion object {
-        const val PARTIAL_ANNOTATION_IDENTIFIER = "com.github.materiiapps.partial.Partialize"
-        const val PARTIAL_ANNOTATION_NAME = "Partialize"
+        const val PKG = "com.github.materiiapps.partial"
 
-        val PARTIAL_CLASSNAME = ClassName("com.github.materiiapps.partial", "Partial")
-        val PARTIALABLE_CLASSNAME = ClassName("com.github.materiiapps.partial", "Partialable")
+        const val PARTIALIZE_QUALIFIED_NAME = "$PKG.Partialize"
+        val PARTIALIZE_CLASSNAME = ClassName(PKG, "Partialize")
+        val REQUIRED_CLASSNAME = ClassName(PKG, "Required")
+
+        val PARTIAL_CLASSNAME = ClassName(PKG, "Partial")
+        val PARTIALABLE_CLASSNAME = ClassName(PKG, "Partialable")
     }
 }
