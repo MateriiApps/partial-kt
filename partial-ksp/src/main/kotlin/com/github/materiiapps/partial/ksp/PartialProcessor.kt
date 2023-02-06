@@ -1,6 +1,7 @@
 package com.github.materiiapps.partial.ksp
 
 import com.google.devtools.ksp.getDeclaredProperties
+import com.google.devtools.ksp.isDefault
 import com.google.devtools.ksp.processing.*
 import com.google.devtools.ksp.symbol.*
 import com.google.devtools.ksp.validate
@@ -269,72 +270,70 @@ internal class PartialProcessor(
                 .build()
         }
 
+        // TODO: use kotlin format args instead of embedding directly
+        // allows for automatic imports of KClass argument types
         private fun createAnnotation(annotation: KSAnnotation): AnnotationSpec? {
-            val type = annotation.annotationType.resolve()
-            val className = type.toClassName()
+            val className = annotation.annotationType.resolve().toClassName()
 
             if (className == PARTIALIZE_CLASSNAME || className == REQUIRED_CLASSNAME)
                 return null
 
-            return AnnotationSpec.builder(
-                ClassName(
-                    type.declaration.packageName.asString(),
-                    type.declaration.simpleName.asString()
-                )
-            ).also { builder ->
-                if (annotation.arguments.isNotEmpty()) {
-                    builder.addMember(annotation.arguments.joinToString { argument ->
-                        fun valueToString(value: Any?): CharSequence = when (value) {
-                            null -> "null"
-                            is String -> "\"${value}\""
-                            is Char -> "'${value}'"
+            return AnnotationSpec.builder(className).also { builder ->
+                if (annotation.arguments.isEmpty())
+                    return@also
 
-                            is Boolean,
-                            is Byte,
-                            is Short,
-                            is Int,
-                            is Long,
-                            is Float,
-                            is Double,
-                            -> value.toString()
+                for (argument in annotation.arguments) {
+                    if (argument.isDefault())
+                        continue
 
-                            is ArrayList<*>,
-                            is Array<*>,
-                            -> (value as Iterable<*>).joinToString(
-                                prefix = "[",
-                                postfix = "]",
-                                transform = ::valueToString,
-                            )
+                    fun valueToString(value: Any?): CharSequence = when (value) {
+                        null -> "null"
+                        is String -> "\"${value}\""
+                        is Char -> "'${value}'"
 
-                            is KSType -> {
-                                /*
-                                   There's a compiler bug in <1.8 Kotlin IR which produces a
-                                   "Collection contains no element matching the predicate."
-                                   error if a KClass parameter is passed to an annotation.
-                                */
-                                if (version.isAtLeast(1, 8)) {
-                                    value.declaration.qualifiedName?.asString() + "::class"
-                                } else {
-                                    logger.warn(
-                                        "Cannot properly read KSType from annotation arguments in Kotlin versions <1.8. " +
-                                                "As a workaround, converting the value to string. This may or may not work.",
-                                        symbol = argument
-                                    )
-                                    "$value::class"
-                                }
-                            }
+                        is Boolean,
+                        is Byte,
+                        is Short,
+                        is Int,
+                        is Long,
+                        is Float,
+                        is Double,
+                        -> value.toString()
 
-                            else -> {
+                        is ArrayList<*> -> (value as Iterable<*>).joinToString(
+                            prefix = "[",
+                            postfix = "]",
+                            transform = ::valueToString,
+                        )
+
+                        is KSType -> {
+                            /*
+                               There's a compiler bug in <1.8 Kotlin IR which produces a
+                               "Collection contains no element matching the predicate."
+                               error if a KClass parameter is passed to an annotation.
+                            */
+                            if (version.isAtLeast(1, 8)) {
+                                value.declaration.qualifiedName?.asString() + "::class"
+                            } else {
                                 logger.warn(
-                                    "Unknown annotation argument type ${value.javaClass.simpleName}, converting to string",
+                                    "Cannot properly read KSType from annotation arguments in Kotlin versions <1.8. " +
+                                            "As a workaround, converting the value to string. This may or may not work.",
                                     symbol = argument
                                 )
-                                value.toString()
+                                "$value::class"
                             }
                         }
 
-                        valueToString(argument.value)
-                    })
+                        else -> {
+                            logger.warn(
+                                "Unknown annotation argument type ${value.javaClass.simpleName}, converting to string",
+                                symbol = argument
+                            )
+                            value.toString()
+                        }
+                    }
+
+                    builder.addMember(argument.name?.asString() + " = " + valueToString(argument.value))
                 }
             }.build()
         }

@@ -6,25 +6,28 @@ import com.github.materiiapps.partial.Required
 import kotlin.reflect.KClass
 
 annotation class SampleAnnotation(
-    val a: Int,
+    val a: Int = 0,
     val b: KClass<*>,
     val c: Array<KClass<*>>,
 )
 
-@Partialize(children = [
-    AgedUser::class,
-    UnknownUser::class
-])
+@Partialize(
+    children = [
+        AgedUser::class,
+        UnknownUser::class
+    ]
+)
 interface GenericUser {
     val name: String
 }
 
 @Partialize
-@SampleAnnotation(0, AgedUser::class, [AgedUser::class])
+@SampleAnnotation(1, AgedUser::class, [AgedUser::class])
 data class AgedUser(
     @SampleAnnotation(0, AgedUser::class, [])
     override val name: String,
 
+    @SampleAnnotation(b = AgedUser::class, c = [])
     val age: Int,
 ) : GenericUser
 
@@ -43,7 +46,7 @@ fun main() {
     println(merged)
 
     val generic: GenericUser = merged
-    val newData: GenericUserPartial = AgedUserPartial(age = Partial.Value(15)) // must be of "same" type's partial
+    val newData: GenericUserPartial = AgedUserPartial(age = Partial.Value(15)) // must be of the same type's partial
     val merged2 = generic.merge(newData)
     println(merged2)
 }
