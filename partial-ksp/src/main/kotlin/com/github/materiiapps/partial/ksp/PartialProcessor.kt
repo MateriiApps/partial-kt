@@ -212,20 +212,20 @@ internal class PartialProcessor(
                 property.simpleName.asString() to isRequired
             }
 
-            val stringParameters = properties.joinToString(postfix = "\n") { (name, isRequired) ->
-                if (isRequired)
-                    "\n  $name = $name"
-                else
-                    "\n  $name = $name.getOrElse { full.$name }"
+            val code = properties.joinToString(postfix = "\n") { (_, isRequired) ->
+                "\n  %N = %N${if (!isRequired) ".getOrElse { full.%N }" else ""}"
             }
+
+            val args = properties.flatMap { (name, isRequired) -> List(if (!isRequired) 3 else 2) { name } }
+                .toList().toTypedArray()
 
             return FunSpec.builder("merge")
                 .addModifiers(KModifier.OVERRIDE)
                 .returns(className)
                 .addParameter("full", className)
                 .addStatement(
-                    "return %T($stringParameters)",
-                    className
+                    "return %T($code)",
+                    className, *args
                 )
                 .build()
         }
@@ -252,19 +252,19 @@ internal class PartialProcessor(
                 property.simpleName.asString() to isRequired
             }
 
-            val stringParameters = properties.joinToString(postfix = "\n") { (name, isRequired) ->
-                if (isRequired)
-                    "\n  $name = $name"
-                else
-                    "\n  $name = Partial.Value($name)"
+            val code = properties.joinToString(postfix = "\n") { (_, isRequired) ->
+                "\n  %N = ${if (isRequired) "%N" else "Partial.Value(%N)"}"
             }
+
+            val args = properties.flatMap { (name) -> List(2) { name } }
+                .toList().toTypedArray()
 
             return FunSpec.builder("toPartial")
                 .receiver(classDeclaration.toClassName())
                 .returns(partialClass)
                 .addStatement(
-                    "return %T($stringParameters)",
-                    partialClass
+                    "return %T($code)",
+                    partialClass, *args
                 )
                 .build()
         }
@@ -341,7 +341,7 @@ internal class PartialProcessor(
     }
 
     companion object {
-        const val PKG = "com.github.materiiapps.partial"
+        private const val PKG = "com.github.materiiapps.partial"
 
         const val PARTIALIZE_QUALIFIED_NAME = "$PKG.Partialize"
         val PARTIALIZE_CLASSNAME = ClassName(PKG, "Partialize")
