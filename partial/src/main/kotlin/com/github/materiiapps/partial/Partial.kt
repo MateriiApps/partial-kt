@@ -38,6 +38,16 @@ public sealed interface Partial<out T> {
 }
 
 /**
+ * Shortcut utility function for the [Partial.Value] class
+ */
+public inline fun <T> partial(value: T): Partial.Value<T> = Partial.Value(value)
+
+/**
+ * Shortcut utility function for the [Partial.Missing] singleton
+ */
+public inline fun missing(): Partial.Missing = Partial.Missing
+
+/**
  * Gets the present value or generate a value with [block] if it's missing.
  */
 public inline fun <T> Partial<T>.getOrElse(crossinline block: () -> T): T {
