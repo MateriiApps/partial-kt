@@ -205,12 +205,16 @@ internal class PartialProcessor(
 
         private fun makeMergeFunction(classDeclaration: KSClassDeclaration): FunSpec {
             val className = classDeclaration.toClassName()
-            val properties = classDeclaration.getDeclaredProperties().map { property ->
-                val isRequired = property.annotations.any {
+            val classProperties = classDeclaration.getDeclaredProperties()
+            val properties = classDeclaration.primaryConstructor!!.parameters.map { param ->
+                val name = param.name!!.asString()
+
+                val constructorParam = classProperties.find { it.simpleName.asString() == name }!!
+                val isRequired = constructorParam.annotations.any {
                     it.annotationType.resolve().toClassName() == REQUIRED_CLASSNAME
                 }
 
-                property.simpleName.asString() to isRequired
+                name to isRequired
             }
 
             val code = properties.joinToString(postfix = "\n") { (_, isRequired) ->
@@ -245,12 +249,16 @@ internal class PartialProcessor(
 
         private fun makeToPartialFunction(partialClassName: String, classDeclaration: KSClassDeclaration): FunSpec {
             val partialClass = ClassName(classDeclaration.packageName.asString(), partialClassName)
-            val properties = classDeclaration.getDeclaredProperties().map { property ->
-                val isRequired = property.annotations.any {
+            val classProperties = classDeclaration.getDeclaredProperties()
+            val properties = classDeclaration.primaryConstructor!!.parameters.map { param ->
+                val name = param.name!!.asString()
+
+                val constructorParam = classProperties.find { it.simpleName.asString() == name }!!
+                val isRequired = constructorParam.annotations.any {
                     it.annotationType.resolve().toClassName() == REQUIRED_CLASSNAME
                 }
 
-                property.simpleName.asString() to isRequired
+                name to isRequired
             }
 
             val code = properties.joinToString(postfix = "\n") { (_, isRequired) ->
