@@ -205,23 +205,13 @@ internal class PartialProcessor(
 
         private fun makeMergeFunction(classDeclaration: KSClassDeclaration): FunSpec {
             val className = classDeclaration.toClassName()
-            val classProperties = classDeclaration.getDeclaredProperties()
-            val properties = classDeclaration.primaryConstructor!!.parameters.map { param ->
-                val name = param.name!!.asString()
-
-                val constructorParam = classProperties.find { it.simpleName.asString() == name }!!
-                val isRequired = constructorParam.annotations.any {
-                    it.annotationType.resolve().toClassName() == REQUIRED_CLASSNAME
-                }
-
-                name to isRequired
-            }
+            val properties = getDataClassProperties(classDeclaration)
 
             val code = properties.joinToString(postfix = "\n") { (_, isRequired) ->
                 "\n  %N = %N${if (!isRequired) ".getOrElse { full.%N }" else ""}"
             }
 
-            val args = properties.flatMap { (name, isRequired) -> List(if (!isRequired) 3 else 2) { name } }
+            val args = properties.flatMap { (prop, isRequired) -> List(if (!isRequired) 3 else 2) { prop.simpleName.asString() } }
                 .toList().toTypedArray()
 
             return FunSpec.builder("merge")
@@ -249,23 +239,13 @@ internal class PartialProcessor(
 
         private fun makeToPartialFunction(partialClassName: String, classDeclaration: KSClassDeclaration): FunSpec {
             val partialClass = ClassName(classDeclaration.packageName.asString(), partialClassName)
-            val classProperties = classDeclaration.getDeclaredProperties()
-            val properties = classDeclaration.primaryConstructor!!.parameters.map { param ->
-                val name = param.name!!.asString()
-
-                val constructorParam = classProperties.find { it.simpleName.asString() == name }!!
-                val isRequired = constructorParam.annotations.any {
-                    it.annotationType.resolve().toClassName() == REQUIRED_CLASSNAME
-                }
-
-                name to isRequired
-            }
+            val properties = getDataClassProperties(classDeclaration)
 
             val code = properties.joinToString(postfix = "\n") { (_, isRequired) ->
                 "\n  %N = ${if (isRequired) "%N" else "Partial.Value(%N)"}"
             }
 
-            val args = properties.flatMap { (name) -> List(2) { name } }
+            val args = properties.flatMap { (prop) -> List(2) { prop.simpleName.asString() } }
                 .toList().toTypedArray()
 
             return FunSpec.builder("toPartial")
@@ -276,6 +256,25 @@ internal class PartialProcessor(
                     partialClass, *args
                 )
                 .build()
+        }
+
+        /**
+         * Gets all the primary constructor defined properties of a data class,
+         * along with whether they are a required partial property (marked with @Required)
+         */
+        private fun getDataClassProperties(classDeclaration: KSClassDeclaration): List<Pair<KSPropertyDeclaration, Boolean>> {
+            val classProperties = classDeclaration.getDeclaredProperties()
+            val properties = classDeclaration.primaryConstructor!!.parameters.map { param ->
+                val name = param.name!!.asString()
+                val property = classProperties.find { it.simpleName.asString() == name }!!
+                val isRequired = property.annotations.any {
+                    it.annotationType.resolve().toClassName() == REQUIRED_CLASSNAME
+                }
+
+                property to isRequired
+            }
+
+            return properties
         }
 
         // TODO: use kotlin format args instead of embedding directly
