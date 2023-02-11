@@ -139,31 +139,16 @@ internal class PartialProcessor(
         }
 
         private fun makePartialClass(partialClassName: String, classDeclaration: KSClassDeclaration): TypeSpec {
-            val annotations = classDeclaration.annotations
-                .mapNotNull { createAnnotation(it) }
-                .toList()
-
-            val partialSuperclasses = classDeclaration.superTypes
-                .mapNotNull { it.resolve().declaration as? KSClassDeclaration }
-                .filter { it.annotations.any { it.annotationType.resolve().toClassName() == PARTIALIZE_CLASSNAME } }
-                .map {
-                    val className = it.toClassName()
-                    ClassName(className.packageName, "${className.simpleName}Partial")
-                }
-                .toList()
+            val partialSuperclasses = getPartializedSuperclasses(classDeclaration)
 
             val properties = mutableListOf<PropertySpec>()
             val parameters = mutableListOf<ParameterSpec>()
 
-            classDeclaration.getDeclaredProperties().forEach { property ->
+            getDataClassProperties(classDeclaration).forEach { (property, isRequired) ->
                 val name = property.simpleName.asString()
                 val paramAnnotations = property.annotations
                     .mapNotNull { createAnnotation(it) }
                     .toList()
-
-                val isRequired = property.annotations.any {
-                    it.annotationType.resolve().toClassName() == REQUIRED_CLASSNAME
-                }
 
                 val type = if (isRequired) {
                     property.type.toTypeName()
@@ -190,7 +175,9 @@ internal class PartialProcessor(
             return TypeSpec
                 .classBuilder(partialClassName)
                 .addModifiers(classDeclaration.modifiers.mapNotNull { it.toKModifier() })
-                .addAnnotations(annotations)
+                .addAnnotations(classDeclaration.annotations
+                    .mapNotNull { createAnnotation(it) }
+                    .toList())
                 .primaryConstructor(
                     FunSpec.constructorBuilder()
                         .addParameters(parameters)
@@ -198,7 +185,10 @@ internal class PartialProcessor(
                 )
                 .addProperties(properties)
                 .addSuperinterface(PARTIALABLE_CLASSNAME.parameterizedBy(classDeclaration.toClassName()))
-                .addSuperinterfaces(partialSuperclasses)
+                .addSuperinterfaces(partialSuperclasses.map {
+                    val className = it.toClassName()
+                    ClassName(className.packageName, "${className.simpleName}Partial")
+                })
                 .addFunction(makeMergeFunction(classDeclaration))
                 .build()
         }
@@ -211,8 +201,11 @@ internal class PartialProcessor(
                 "\n  %N = %N${if (!isRequired) ".getOrElse { full.%N }" else ""}"
             }
 
-            val args = properties.flatMap { (prop, isRequired) -> List(if (!isRequired) 3 else 2) { prop.simpleName.asString() } }
-                .toList().toTypedArray()
+            val args = properties.flatMap { (prop, isRequired) ->
+                List(if (!isRequired) 3 else 2) {
+                    prop.simpleName.asString()
+                }
+            }.toList().toTypedArray()
 
             return FunSpec.builder("merge")
                 .addModifiers(KModifier.OVERRIDE)
@@ -258,6 +251,13 @@ internal class PartialProcessor(
                 .build()
         }
 
+        private fun getPartializedSuperclasses(classDeclaration: KSClassDeclaration): List<KSClassDeclaration> {
+            return classDeclaration.superTypes
+                .mapNotNull { it.resolve().declaration as? KSClassDeclaration }
+                .filter { it.annotations.any { a -> a.annotationType.resolve().toClassName() == PARTIALIZE_CLASSNAME } }
+                .toList()
+        }
+
         /**
          * Gets all the primary constructor defined properties of a data class,
          * along with whether they are a required partial property (marked with @Required)
@@ -267,11 +267,17 @@ internal class PartialProcessor(
             val properties = classDeclaration.primaryConstructor!!.parameters.map { param ->
                 val name = param.name!!.asString()
                 val property = classProperties.find { it.simpleName.asString() == name }!!
+
                 val isRequired = property.annotations.any {
                     it.annotationType.resolve().toClassName() == REQUIRED_CLASSNAME
                 }
 
-                property to isRequired
+                val isSuperRequired = property.findOverridee()
+                    ?.annotations
+                    ?.any { it.annotationType.resolve().toClassName() == REQUIRED_CLASSNAME }
+                    ?: false
+
+                property to (isRequired || isSuperRequired)
             }
 
             return properties
