@@ -3,6 +3,7 @@ package com.github.materiiapps.partial.example
 import com.github.materiiapps.partial.Partial
 import com.github.materiiapps.partial.Partialize
 import com.github.materiiapps.partial.Required
+import com.github.materiiapps.partial.Skip
 import kotlin.reflect.KClass
 
 annotation class SampleAnnotation(
@@ -19,6 +20,9 @@ annotation class SampleAnnotation(
 )
 interface GenericUser {
     val name: String
+
+    @Skip
+    val private: Boolean
 }
 
 @Partialize
@@ -29,14 +33,20 @@ data class AgedUser(
 
     @SampleAnnotation(b = AgedUser::class, c = [])
     val age: Int,
+
+    override val private: Boolean = false  // overridden skipped property (needs default value)
 ) : GenericUser
 
 @Partialize
 data class UnknownUser(
     override val name: String,
+    override val private: Boolean = true, // overridden skipped property (needs default value)
 
     @Required // marks this field to not be boxed (always present)
     val deleted: Boolean,
+
+    @Skip
+    val deleteDate: Long = 0, // new skipped field (needs default value)
 ) : GenericUser
 
 fun main() {

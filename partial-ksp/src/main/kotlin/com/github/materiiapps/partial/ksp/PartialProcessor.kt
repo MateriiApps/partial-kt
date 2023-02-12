@@ -93,10 +93,9 @@ internal class PartialProcessor(
             return TypeSpec.interfaceBuilder(partialName)
                 .addModifiers(srcClass.modifiers.mapNotNull { it.toKModifier() })
                 .addProperties(
-                    srcClass.getDeclaredProperties().map { property ->
-                        val isRequired = property.annotations.any {
-                            it.annotationType.resolve().toClassName() == REQUIRED_CLASSNAME
-                        }
+                    srcClass.getDeclaredProperties().mapNotNull { property ->
+                        val isRequired = isPropertyRequired(property)
+                            ?: return@mapNotNull null
 
                         val type = if (isRequired) {
                             property.type.toTypeName()
@@ -264,18 +263,21 @@ internal class PartialProcessor(
          */
         private fun getDataClassProperties(classDeclaration: KSClassDeclaration): List<Pair<KSPropertyDeclaration, Boolean>> {
             val classProperties = classDeclaration.getDeclaredProperties()
-            val properties = classDeclaration.primaryConstructor!!.parameters.map { param ->
+            val properties = classDeclaration.primaryConstructor!!.parameters.mapNotNull { param ->
                 val name = param.name!!.asString()
                 val property = classProperties.find { it.simpleName.asString() == name }!!
 
-                val isRequired = property.annotations.any {
-                    it.annotationType.resolve().toClassName() == REQUIRED_CLASSNAME
-                }
-
+                val isRequired = isPropertyRequired(property)
                 val isSuperRequired = property.findOverridee()
-                    ?.annotations
-                    ?.any { it.annotationType.resolve().toClassName() == REQUIRED_CLASSNAME }
-                    ?: false
+                    .let { if (it != null) isPropertyRequired(it) else false }
+
+                if (isRequired == null || isSuperRequired == null) {
+                    if (!param.hasDefault) {
+                        logger.error("Cannot have a property with @Skip without a default value!", param)
+                    }
+
+                    return@mapNotNull null
+                }
 
                 property to (isRequired || isSuperRequired)
             }
@@ -283,13 +285,33 @@ internal class PartialProcessor(
             return properties
         }
 
+        /**
+         * Finds the @Required or @Skip annotations on a class property
+         * @returns true if required property or null is skipped
+         */
+        private fun isPropertyRequired(property: KSPropertyDeclaration): Boolean? {
+            return property.annotations.any {
+                val className = it.annotationType.resolve().toClassName()
+
+                if (className == SKIP_CLASSNAME)
+                    return null
+
+                className == REQUIRED_CLASSNAME
+            }
+        }
+
         // TODO: use kotlin format args instead of embedding directly
         // allows for automatic imports of KClass argument types
         private fun createAnnotation(annotation: KSAnnotation): AnnotationSpec? {
             val className = annotation.annotationType.resolve().toClassName()
 
-            if (className == PARTIALIZE_CLASSNAME || className == REQUIRED_CLASSNAME)
+            if (
+                className == PARTIALIZE_CLASSNAME
+                || className == REQUIRED_CLASSNAME
+                || className == SKIP_CLASSNAME
+            ) {
                 return null
+            }
 
             return AnnotationSpec.builder(className).also { builder ->
                 if (annotation.arguments.isEmpty())
@@ -359,6 +381,7 @@ internal class PartialProcessor(
         val PARTIALIZE_CLASSNAME = ClassName(PKG, "Partialize")
         val REQUIRED_CLASSNAME = ClassName(PKG, "Required")
 
+        val SKIP_CLASSNAME = ClassName(PKG, "Skip")
         val PARTIAL_CLASSNAME = ClassName(PKG, "Partial")
         val PARTIALABLE_CLASSNAME = ClassName(PKG, "Partialable")
     }

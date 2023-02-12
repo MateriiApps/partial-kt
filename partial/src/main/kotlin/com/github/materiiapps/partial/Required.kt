@@ -6,4 +6,4 @@ package com.github.materiiapps.partial
  */
 @Target(AnnotationTarget.PROPERTY)
 @Retention(AnnotationRetention.SOURCE)
-public annotation class Required()
+public annotation class Required
