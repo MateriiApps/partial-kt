@@ -6,7 +6,7 @@ A Kotlin KSP plugin for generating partial variants of classes.
 
 ```kt
 plugins {
-    id("com.google.devtools.ksp") version "1.7.21-1.0.8"
+    id("com.google.devtools.ksp") version "1.8.10-1.0.9"
 }
 
 repositories {
@@ -14,8 +14,8 @@ repositories {
 }
 
 dependencies {
-    implementation("io.github.materiiapps:partial:1.0.0")
-    ksp("io.github.materiiapps:partial-ksp:1.0.0")
+    implementation("io.github.materiiapps:partial:1.1.0")
+    ksp("io.github.materiiapps:partial-ksp:1.1.0")
 }
 
 kotlin {
@@ -37,14 +37,30 @@ intellisense. The generated file will have the following:
 - `[name].toPartial()` for converting a full class to a partial
 - `[name].merge(partial)` for merging a full class with a partial
 
+A single interface and direct implementations of it **are** supported, for a limited hierarchy.
+Mark your interface with `@Partialize(children = [Implementation::class])`, noting that the implementation has to extend
+the interface (obviously).
+
+You can mark a property with (supported on interfaces too):
+
+- `@Required` - To make the field not be boxed in a partial (required upon deserializing)
+- `@Skip` - Omits the field from being generated in the partial class (requires default value
+
+### Example
+
+For a full example, please refer to the testing
+file [here](./example/src/main/kotlin/com/github/materiiapps/partial/example/Data.kt).
+
+Basic serializable class example:
+
 ```kt
 @Partialize
-@Serializable // custom annotations are preserved
+@Serializable // Custom annotations are preserved
 data class User(
     val name: String,
     val age: Int,
-    
-    @SerialName("parent_age") //custom annotations on fields are also preserved.
+
+    @SerialName("parent_age") // Fields annotations are also preserved
     val parentAge: Int
 )
 
