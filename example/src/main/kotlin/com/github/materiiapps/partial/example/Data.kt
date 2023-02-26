@@ -12,6 +12,10 @@ annotation class SampleAnnotation(
     val c: Array<KClass<*>>,
 )
 
+interface Thing {
+    val w: Int
+}
+
 @Partialize(
     children = [
         AgedUser::class,
@@ -34,8 +38,10 @@ data class AgedUser(
     @SampleAnnotation(b = AgedUser::class, c = [])
     val age: Int,
 
-    override val private: Boolean = false  // overridden skipped property (needs default value)
-) : GenericUser
+    override val private: Boolean = false  // overridden skipped property (needs default value),
+    
+    override val w: Int
+) : GenericUser, Thing
 
 @Partialize
 data class UnknownUser(
@@ -50,7 +56,7 @@ data class UnknownUser(
 ) : GenericUser
 
 fun main() {
-    val full = AgedUser(name = "Gregory", age = 14)
+    val full = AgedUser(name = "Gregory", age = 14, w = 76)
     val partial = AgedUserPartial(age = Partial.Value(15))
     val merged = full.merge(partial)
     println(merged)
