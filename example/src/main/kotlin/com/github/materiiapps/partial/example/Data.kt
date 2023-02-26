@@ -38,9 +38,9 @@ data class AgedUser(
     @SampleAnnotation(b = AgedUser::class, c = [])
     val age: Int,
 
-    override val private: Boolean = false  // overridden skipped property (needs default value),
+    override val private: Boolean = false,  // overridden skipped property (needs default value),
     
-    override val w: Int
+    override val w: Int // should not put override on partial
 ) : GenericUser, Thing
 
 @Partialize
