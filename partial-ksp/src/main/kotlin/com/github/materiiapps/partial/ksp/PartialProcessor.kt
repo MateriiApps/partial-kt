@@ -160,7 +160,7 @@ internal class PartialProcessor(
                         .builder(name, type)
                         .addAnnotations(paramAnnotations)
                         .initializer(name)
-                        .addModifiers(property.modifiers.mapNotNull { it.toKModifier() })
+                        .addModifiers(property.modifiers.mapNotNull { it.toKModifier() }.minus(KModifier.OVERRIDE))
                         .build()
                 )
                 parameters.add(
