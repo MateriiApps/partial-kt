@@ -8,7 +8,7 @@ plugins {
 }
 
 dependencies {
-    implementation("org.jetbrains.kotlinx:kotlinx-serialization-core:1.4.1")
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-core:1.6.0")
 }
 
 kotlin {

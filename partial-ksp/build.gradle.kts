@@ -9,9 +9,9 @@ plugins {
 
 dependencies {
     api(kotlin("stdlib"))
-    api("com.google.devtools.ksp:symbol-processing-api:1.8.10-1.0.9")
+    api("com.google.devtools.ksp:symbol-processing-api:1.9.20-1.0.14")
 
-    val poetVersion = "1.12.0"
+    val poetVersion = "1.14.2"
     implementation("com.squareup:kotlinpoet:$poetVersion")
     implementation("com.squareup:kotlinpoet-ksp:$poetVersion")
 }
