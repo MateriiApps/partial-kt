@@ -6,7 +6,7 @@ A Kotlin KSP plugin for generating partial variants of classes.
 
 ```kt
 plugins {
-    id("com.google.devtools.ksp") version "1.8.10-1.0.9"
+    id("com.google.devtools.ksp") version "1.9.20-1.0.14"
 }
 
 repositories {
@@ -14,8 +14,8 @@ repositories {
 }
 
 dependencies {
-    implementation("io.github.materiiapps:partial:1.1.0")
-    ksp("io.github.materiiapps:partial-ksp:1.1.0")
+    implementation("io.github.materiiapps:partial:1.2.0")
+    ksp("io.github.materiiapps:partial-ksp:1.2.0")
 }
 
 kotlin {
